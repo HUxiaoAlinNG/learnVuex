@@ -2,6 +2,13 @@ import applyMixin from "./mixin";
 import ModuleCollection from "./module/module-collection";
 import { forEachValue } from "./utils";
 
+function getState(store, path) {
+  let local = path.reduce((newState, current) => {
+    return newState[current];
+  }, store.state);
+  return local;
+}
+
 // 安装模块
 function installModule(store, rootState, path, module) {
   const namespace = store._modules.getNamespace(path);
@@ -12,19 +19,23 @@ function installModule(store, rootState, path, module) {
     Vue.set(parent, path[path.length - 1], module.state);
   }
   module.forEachMutation((mutation, key) => {
-    store._mutations[namespace + key] = store._mutations[namespace + key] || [];
-    store._mutations[namespace + key].push((payload) => {
-      mutation.call(store, module.state, payload);
+    const type = namespace + key;
+    store._mutations[type] = store._mutations[type] || [];
+    store._mutations[type].push((payload) => {
+      mutation.call(store, getState(store, path), payload);
+      store._subscribers.forEach(sub => sub({ mutation, type }, rootState));
     });
   });
   module.forEachAction((action, key) => {
-    store._actions[namespace + key] = store._actions[namespace + key] || [];
-    store._actions[namespace + key].push(function (payload) {
+    const type = namespace + key;
+    store._actions[type] = store._actions[type] || [];
+    store._actions[type].push(function (payload) {
       action.call(store, this, payload);
     });
   });
   module.forEachGetter((getter, key) => {
-    store._wrappedGetters[namespace + key] = function () {
+    const type = namespace + key;
+    store._wrappedGetters[type] = function () {
       return getter(module.state);
     }
   });
@@ -63,7 +74,7 @@ let Vue;
 export class Store {
   constructor(options) {
     const state = options.state;
-
+    this._subscribers = [];
     // 组装成树结构
     this._modules = new ModuleCollection(options);
 
@@ -75,6 +86,8 @@ export class Store {
 
     // 构造新vue实例进行通信
     resetStoreVM(this, state);
+    // 实现插件功能
+    (options.plugins || []).forEach(plugin => plugin(this));
   }
 
   get state() {
@@ -97,6 +110,14 @@ export class Store {
     installModule(this, this.state, path, rawModule.rawModule);
     // 重新设置state, 更新getters
     resetStoreVM(this, this.state);
+  }
+
+  // 订阅器
+  subscribe(fn) {
+    this._subscribers.push(fn);
+  }
+  replaceState(state) {
+    this._vm._data.$$state = state;
   }
 }
 

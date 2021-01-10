@@ -3,7 +3,22 @@ import Vuex from "../vuex/index"
 
 Vue.use(Vuex)
 
+// 自定义插件
+function persists(store) { // 每次去服务器上拉去最新的 session、local
+  let local = localStorage.getItem('VUEX:state');
+  if (local) {
+    store.replaceState(JSON.parse(local)); // 会用local替换掉所有的状态
+  }
+  store.subscribe((mutation, state) => {
+    // 这里需要做一个节流  throttle lodash
+    localStorage.setItem('VUEX:state', JSON.stringify(state));
+  });
+}
+
 const store = new Vuex.Store({
+  plugins: [
+    persists
+  ],
   state: {
     todos: [
       { id: 1, text: "...", done: true },
