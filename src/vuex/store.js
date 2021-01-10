@@ -16,13 +16,17 @@ function installModule(store, rootState, path, module) {
     const parent = path.slice(0, -1).reduce((memo, current) => {
       return memo[current];
     }, rootState);
-    Vue.set(parent, path[path.length - 1], module.state);
+    store._withCommitting(() => {
+      Vue.set(parent, path[path.length - 1], module.state);
+    });
   }
   module.forEachMutation((mutation, key) => {
     const type = namespace + key;
     store._mutations[type] = store._mutations[type] || [];
     store._mutations[type].push((payload) => {
-      mutation.call(store, getState(store, path), payload);
+      store._withCommitting(() => {
+        mutation.call(store, getState(store, path), payload); // 这里更改状态
+      });
       store._subscribers.forEach(sub => sub({ mutation, type }, rootState));
     });
   });
@@ -75,6 +79,7 @@ export class Store {
   constructor(options) {
     const state = options.state;
     this._subscribers = [];
+    this._committing = false;
     // 组装成树结构
     this._modules = new ModuleCollection(options);
 
@@ -88,6 +93,12 @@ export class Store {
     resetStoreVM(this, state);
     // 实现插件功能
     (options.plugins || []).forEach(plugin => plugin(this));
+    if (store.strict) {
+      // 只要状态一变化会立即执行,在状态变化后同步执行
+      store._vm.$watch(() => store._vm._data.$$state, () => {
+        console.assert(store._committing, '在mutation之外更改了状态')
+      }, { deep: true, sync: true });
+    }
   }
 
   get state() {
@@ -117,7 +128,16 @@ export class Store {
     this._subscribers.push(fn);
   }
   replaceState(state) {
-    this._vm._data.$$state = state;
+    this._withCommitting(() => {
+      this._vm._data.$$state = newState;
+    });
+  }
+  // 增加严格模式
+  _withCommitting(fn) {
+    let committing = this._committing;
+    this._committing = true; // 在函数调用前 表示_committing为true
+    fn();
+    this._committing = committing;
   }
 }
 
