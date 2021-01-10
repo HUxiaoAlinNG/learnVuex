@@ -1,4 +1,4 @@
-import { Store, install } from "./store";
+import { Store, install, mapGetters, mapActions, mapMutations, mapState } from "./store";
 
 export default {
   Store,
@@ -8,4 +8,8 @@ export default {
 export {
   Store,
   install,
+  mapGetters,
+  mapActions,
+  mapMutations,
+  mapState,
 }
