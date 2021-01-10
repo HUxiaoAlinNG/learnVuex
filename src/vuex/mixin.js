@@ -10,7 +10,6 @@ const applyMixin = (Vue) => {
         // 给组件增加$store属性
         this.$store = options.parent.$store;
       }
-      console.log(this.$store);
     }
   })
 }
